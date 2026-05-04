@@ -1,0 +1,63 @@
+{
+  "name": "inu-assignment-sync-electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop GUI for INU Assignment Sync",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host localhost --port 5173\" \"wait-on http://localhost:5173 && electron . --dev\"",
+    "build:renderer": "vite build",
+    "build:icon": "bash ./scripts/build_icon.sh",
+    "build": "npm run build:icon && npm run build:renderer && electron-builder --mac dmg zip",
+    "build:release": "npm run build",
+    "start": "electron .",
+    "preview": "vite preview"
+  },
+  "author": "INU Assignment Sync Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@electron/notarize": "^3.1.1",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "sharp": "^0.34.2",
+    "tailwindcss": "^4.1.11",
+    "vite": "^5.4.19",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "kr.ac.inu.assignment-sync",
+    "productName": "INU Assignment Sync",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "afterSign": "electron/notarize.cjs",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist"
+    },
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
+  }
+}

@@ -1,0 +1,23 @@
+[project]
+name = "inu-assignment-sync"
+version = "0.1.0"
+description = "INU LMS assignment sync tool for macOS Calendar"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Open Source Contributors" }
+]
+dependencies = [
+  "playwright==1.53.0",
+  "python-dotenv==1.1.1",
+  "customtkinter==5.2.2"
+]
+
+[project.scripts]
+inu-assignment-sync = "main:main"
+inu-assignment-sync-gui = "app:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
