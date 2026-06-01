@@ -1,4 +1,24 @@
 const { notarize } = require("@electron/notarize");
+const { execFileSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+
+function adHocSignApp(appPath, projectDir) {
+  const entitlementsPath = path.join(projectDir, "build", "entitlements.mac.plist");
+  const args = ["--force", "--deep", "--sign", "-", "--options", "runtime"];
+
+  if (fs.existsSync(entitlementsPath)) {
+    args.push("--entitlements", entitlementsPath);
+  }
+
+  args.push(appPath);
+
+  console.log("[notarize] Apple Developer ID가 없어 ad-hoc 서명을 적용합니다.");
+  execFileSync("codesign", args, { stdio: "inherit" });
+  execFileSync("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath], {
+    stdio: "inherit",
+  });
+}
 
 module.exports = async function notarizeApp(context) {
   const { electronPlatformName, appOutDir, packager } = context;
@@ -11,6 +31,7 @@ module.exports = async function notarizeApp(context) {
   const appPath = `${appOutDir}/${appName}.app`;
 
   if (process.env.SKIP_NOTARIZE === "true") {
+    adHocSignApp(appPath, packager.projectDir);
     console.log("[notarize] SKIP_NOTARIZE=true 이므로 notarization을 건너뜁니다.");
     return;
   }
@@ -54,5 +75,6 @@ module.exports = async function notarizeApp(context) {
     return;
   }
 
+  adHocSignApp(appPath, packager.projectDir);
   console.log("[notarize] Apple 자격증명이 없어 notarization을 건너뜁니다.");
 };
