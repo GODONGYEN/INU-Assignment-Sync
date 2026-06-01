@@ -233,29 +233,6 @@ npm run open
 - `npm run dist`: `.dmg`, `.zip` 생성
 - `npm run open`: 빌드된 `.app` 실행
 
-## GitHub 업로드
-
-업로드 전 확인:
-
-- `.env` 제외
-- `data/*.sqlite3` 제외
-- `logs/*.log` 제외
-- `electron-app/node_modules` 제외
-- `electron-app/dist` 제외
-- `electron-app/release` 제외
-
-처음 업로드:
-
-```bash
-git init
-git add .
-git status
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/사용자명/저장소명.git
-git push -u origin main
-```
-
 ## 기여와 보안
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
