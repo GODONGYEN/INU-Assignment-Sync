@@ -7,10 +7,13 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite --host localhost --port 5173\" \"wait-on http://localhost:5173 && electron . --dev\"",
+    "pack": "npm run build:icon && npm run build:renderer && electron-builder --mac dir",
+    "dist": "npm run build:icon && npm run build:renderer && electron-builder --mac dmg zip",
+    "open": "open \"release/mac-arm64/INU Assignment Sync.app\"",
     "build:renderer": "vite build",
     "build:icon": "bash ./scripts/build_icon.sh",
-    "build": "npm run build:icon && npm run build:renderer && electron-builder --mac dmg zip",
-    "build:release": "npm run build",
+    "build": "npm run dist",
+    "build:release": "npm run dist",
     "start": "electron .",
     "preview": "vite preview"
   },
@@ -21,8 +24,8 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.11",
     "@electron/notarize": "^3.1.1",
+    "@tailwindcss/vite": "^4.1.11",
     "@vitejs/plugin-react": "^4.4.1",
     "concurrently": "^9.1.2",
     "electron": "^31.7.7",
@@ -43,6 +46,31 @@
       "dist/**/*",
       "electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../main.py",
+        "to": "python/main.py"
+      },
+      {
+        "from": "../src",
+        "to": "python/src",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../requirements.txt",
+        "to": "python/requirements.txt"
+      },
+      {
+        "from": "../.env.example",
+        "to": "python/.env.example"
+      },
+      {
+        "from": "../README.md",
+        "to": "python/README.md"
+      }
     ],
     "asar": true,
     "afterSign": "electron/notarize.cjs",

@@ -4,14 +4,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-# 프로젝트 루트의 .env 파일을 읽어 환경변수를 메모리에 올립니다.
+# 개발 환경에서는 프로젝트 루트를, 패키징 앱에서는 Electron이 넘겨준 앱 데이터 경로를 사용합니다.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-ENV_PATH = PROJECT_ROOT / ".env"
 ENV_EXAMPLE_PATH = PROJECT_ROOT / ".env.example"
 README_PATH = PROJECT_ROOT / "README.md"
-LOGS_DIR = PROJECT_ROOT / "logs"
+APP_DATA_DIR = Path(os.getenv("INU_SYNC_APP_DATA_DIR", str(PROJECT_ROOT))).expanduser()
+ENV_PATH = Path(os.getenv("INU_SYNC_ENV_PATH", str(APP_DATA_DIR / ".env"))).expanduser()
+LOGS_DIR = Path(os.getenv("INU_SYNC_LOGS_DIR", str(APP_DATA_DIR / "logs"))).expanduser()
 LOG_FILE_PATH = LOGS_DIR / "app.log"
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.getenv("INU_SYNC_DATA_DIR", str(APP_DATA_DIR / "data"))).expanduser()
 
 load_dotenv(ENV_PATH)
 
@@ -78,7 +79,10 @@ LOGIN_WAIT_TIMEOUT_MS = get_int("LOGIN_WAIT_TIMEOUT_MS", 180000)
 CALENDAR_NAME = os.getenv("CALENDAR_NAME", "INU 과제")
 EVENT_DURATION_MINUTES = get_int("EVENT_DURATION_MINUTES", 30)
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Seoul")
-DATABASE_PATH = PROJECT_ROOT / os.getenv("DATABASE_PATH", "data/sync_state.sqlite3")
+database_path_value = os.getenv("DATABASE_PATH", "data/sync_state.sqlite3")
+DATABASE_PATH = Path(database_path_value).expanduser()
+if not DATABASE_PATH.is_absolute():
+    DATABASE_PATH = APP_DATA_DIR / database_path_value
 CALENDAR_MONTHS_BACK = get_int("CALENDAR_MONTHS_BACK", 2)
 CALENDAR_MONTHS_FORWARD = get_int("CALENDAR_MONTHS_FORWARD", 6)
 INCLUDE_PAST_ASSIGNMENTS = get_bool("INCLUDE_PAST_ASSIGNMENTS", False)

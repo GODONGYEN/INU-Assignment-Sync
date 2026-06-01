@@ -22,7 +22,7 @@ html,
 }
 
 body {
-  min-width: 1200px;
+  min-width: 980px;
 }
 
 #root {
@@ -31,7 +31,7 @@ body {
 
 @layer components {
   .app-shell {
-    @apply min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.15),_transparent_28%),linear-gradient(180deg,#020617_0%,#0f172a_45%,#111827_100%)] text-slate-100;
+    @apply min-h-screen bg-[radial-gradient(circle_at_12%_12%,_rgba(34,211,238,0.22),_transparent_30%),radial-gradient(circle_at_88%_8%,_rgba(251,191,36,0.12),_transparent_26%),linear-gradient(135deg,#020617_0%,#0f172a_48%,#111827_100%)] text-slate-100;
   }
 
   .app-container {
@@ -39,7 +39,16 @@ body {
   }
 
   .hero-card {
-    @apply flex flex-wrap items-end justify-between gap-4 rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur;
+    @apply relative overflow-hidden rounded-[36px] border border-white/10 bg-white/5 p-7 shadow-2xl shadow-slate-950/40 backdrop-blur md:flex md:items-end md:justify-between md:gap-8;
+  }
+
+  .hero-card::before {
+    content: "";
+    @apply pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_center,_rgba(34,211,238,0.18),_transparent_55%)];
+  }
+
+  .hero-copy {
+    @apply relative z-10 max-w-3xl;
   }
 
   .hero-kicker {
@@ -47,7 +56,7 @@ body {
   }
 
   .hero-card h1 {
-    @apply mt-2 text-4xl font-semibold tracking-tight text-white;
+    @apply mt-2 max-w-3xl text-5xl font-semibold leading-tight tracking-tight text-white;
   }
 
   .hero-subtitle {
@@ -58,12 +67,52 @@ body {
     @apply mt-3 max-w-3xl text-sm leading-7 text-slate-300;
   }
 
+  .hero-actions {
+    @apply mt-6 flex flex-wrap gap-3;
+  }
+
+  .hero-button {
+    @apply px-5;
+  }
+
   .hero-meta {
-    @apply rounded-3xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300;
+    @apply relative z-10 mt-6 grid min-w-80 gap-2 rounded-3xl border border-white/10 bg-slate-950/55 px-5 py-4 text-sm text-slate-300 md:mt-0;
+  }
+
+  .hero-meta-label {
+    @apply text-xs uppercase tracking-[0.25em] text-cyan-300/80;
+  }
+
+  .hero-meta strong {
+    @apply text-xl text-white;
+  }
+
+  .hero-meta span {
+    @apply text-slate-300;
+  }
+
+  .workflow-strip {
+    @apply grid gap-4 lg:grid-cols-3;
+  }
+
+  .workflow-card {
+    @apply flex items-start gap-4 rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/30 backdrop-blur;
+  }
+
+  .workflow-step {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-cyan-300 text-base font-bold text-slate-950 shadow-lg shadow-cyan-950/30;
+  }
+
+  .workflow-card h2 {
+    @apply text-lg font-semibold text-white;
+  }
+
+  .workflow-card p {
+    @apply mt-1 text-sm leading-6 text-slate-400;
   }
 
   .status-grid {
-    @apply grid gap-4 md:grid-cols-3;
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-4;
   }
 
   .status-card {
@@ -118,6 +167,10 @@ body {
     @apply flex items-center justify-between gap-3;
   }
 
+  .panel-actions {
+    @apply flex items-center gap-3;
+  }
+
   .panel-header h2 {
     @apply text-2xl font-semibold text-white;
   }
@@ -147,11 +200,15 @@ body {
   }
 
   .primary-button {
-    @apply rounded-2xl border border-cyan-400/40 bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition duration-200 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply rounded-2xl border border-cyan-300/50 bg-cyan-300 px-4 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-950/20 transition duration-200 hover:-translate-y-0.5 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50;
   }
 
   .soft-button {
-    @apply rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-100 transition duration-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-100 transition duration-200 hover:-translate-y-0.5 hover:bg-white/10 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50;
+  }
+
+  .compact-button {
+    @apply px-3 py-2 text-xs;
   }
 
   .toggle-chip {
@@ -164,6 +221,14 @@ body {
 
   .toggle-row {
     @apply mt-5 flex flex-wrap gap-3;
+  }
+
+  .quick-guide-card {
+    @apply mt-5 grid gap-1 rounded-3xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100;
+  }
+
+  .quick-guide-card strong {
+    @apply text-amber-50;
   }
 
   .button-row {
@@ -206,6 +271,10 @@ body {
     @apply mt-6 flex-1 overflow-auto rounded-3xl border border-white/10 bg-black/40 p-4 text-xs leading-6 text-slate-200;
   }
 
+  .log-collapsed {
+    @apply mt-6 rounded-3xl border border-white/10 bg-black/20 p-6 text-sm text-slate-400;
+  }
+
   .log-line {
     @apply border-b border-white/5 px-1 py-1.5 font-mono text-slate-200;
   }
@@ -236,6 +305,10 @@ body {
 
   .notice-banner-error {
     @apply border-rose-400/30 bg-rose-500/10 text-rose-200;
+  }
+
+  .notice-banner-safe {
+    @apply border-emerald-400/20 bg-emerald-500/10 text-emerald-100;
   }
 
   .fallback-screen {
