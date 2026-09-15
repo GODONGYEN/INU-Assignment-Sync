@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   REMINDER_MINUTES: "1440,180",
   DRY_RUN: "true",
   LOGIN_WAIT_TIMEOUT_MS: "180000",
+  SAVE_DEBUG_SNAPSHOT: "false",
 };
 
 const DEFAULT_SUMMARY = {
@@ -68,6 +69,7 @@ function normalizeSettings(settings) {
     REMINDER_MINUTES: settings.REMINDER_MINUTES ?? DEFAULT_SETTINGS.REMINDER_MINUTES,
     DRY_RUN: settings.DRY_RUN ?? DEFAULT_SETTINGS.DRY_RUN,
     LOGIN_WAIT_TIMEOUT_MS: settings.LOGIN_WAIT_TIMEOUT_MS ?? DEFAULT_SETTINGS.LOGIN_WAIT_TIMEOUT_MS,
+    SAVE_DEBUG_SNAPSHOT: settings.SAVE_DEBUG_SNAPSHOT ?? DEFAULT_SETTINGS.SAVE_DEBUG_SNAPSHOT,
   };
 }
 
@@ -104,6 +106,7 @@ export default function App() {
   const [lastSyncAt, setLastSyncAt] = useState(() => localStorage.getItem("inuSync:lastSyncAt") ?? "-");
   const dryRunEnabled = settings.DRY_RUN === "true";
   const includePastAssignments = settings.INCLUDE_PAST_ASSIGNMENTS === "true";
+  const debugSnapshotEnabled = settings.SAVE_DEBUG_SNAPSHOT === "true";
   const totalMonthRange =
     Number.parseInt(settings.CALENDAR_MONTHS_BACK || "0", 10) +
     Number.parseInt(settings.CALENDAR_MONTHS_FORWARD || "0", 10) +
@@ -336,6 +339,7 @@ export default function App() {
       REMINDER_MINUTES: settings.REMINDER_MINUTES.trim(),
       DRY_RUN: settings.DRY_RUN,
       LOGIN_WAIT_TIMEOUT_MS: settings.LOGIN_WAIT_TIMEOUT_MS.trim(),
+      SAVE_DEBUG_SNAPSHOT: settings.SAVE_DEBUG_SNAPSHOT,
     };
 
     if (!updates.CALENDAR_NAME) {
@@ -600,6 +604,19 @@ export default function App() {
                 >
                   {dryRunEnabled ? "DRY RUN 켜짐" : "실제 등록 모드"}
                 </button>
+
+                <button
+                  className={`toggle-chip ${settings.SAVE_DEBUG_SNAPSHOT === "true" ? "toggle-chip-on" : ""}`}
+                  onClick={() =>
+                    setSettings((previous) => ({
+                      ...previous,
+                      SAVE_DEBUG_SNAPSHOT: toBoolString(previous.SAVE_DEBUG_SNAPSHOT !== "true"),
+                    }))
+                  }
+                  type="button"
+                >
+                  {debugSnapshotEnabled ? "진단 저장 켜짐" : "진단 저장 꺼짐"}
+                </button>
               </div>
 
               <div className="quick-guide-card">
@@ -609,6 +626,9 @@ export default function App() {
                     ? "일정은 만들지 않고 어떤 과제가 등록될지 로그로만 확인합니다."
                     : "중복 검사를 거친 뒤 macOS Calendar에 일정을 추가하거나 수정합니다."}
                 </span>
+                {debugSnapshotEnabled ? (
+                  <span>selector 수집에 실패하면 Application Support의 logs/lms_debug에 진단 파일을 저장합니다.</span>
+                ) : null}
               </div>
 
               <div className="button-row">

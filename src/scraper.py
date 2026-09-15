@@ -1,6 +1,7 @@
 import calendar
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlparse, urlunparse
 from zoneinfo import ZoneInfo
@@ -39,7 +40,9 @@ from src.config import (
     LOGIN_SUCCESS_WAIT_SELECTOR,
     LOGIN_WAIT_TIMEOUT_MS,
     LOGIN_URL,
+    LOGS_DIR,
     PAGE_TIMEOUT_MS,
+    SAVE_DEBUG_SNAPSHOT,
     SLOW_MO_MS,
     TIMEZONE,
     USE_MANUAL_LOGIN,
@@ -48,16 +51,83 @@ from src.models import RawAssignment
 from src.normalizer import clean_text
 
 
+CALENDAR_ROOT_FALLBACK_SELECTORS = [
+    "table.calendarmonth.calendartable",
+    ".maincalendar",
+    ".calendarwrapper",
+    "[data-region='calendar']",
+    "[data-region='month-view']",
+    ".calendar-event-panel",
+    ".calendar-controls",
+]
+
+CURRENT_MONTH_FALLBACK_SELECTORS = [
+    "h2.current",
+    ".current",
+    ".calendar-controls .current",
+    "[data-region='view-title']",
+    ".page-header-headings h1",
+    "#page-header h1",
+    "h1",
+]
+
+CALENDAR_EVENT_FALLBACK_SELECTORS = [
+    "ul.events-new li.calendar_event_course",
+    "li.calendar_event_course",
+    ".calendar_event_course",
+    ".calendar_event_group",
+    ".calendar_event_user",
+    ".calendar_event_global",
+    "[data-region='event-item']",
+    "[data-event-id]",
+    ".eventlist .event",
+    ".event",
+    "a[href*='calendar/view.php?view=event']",
+    "a[href*='/mod/assign/']",
+    "a[href*='mod/assign/view.php']",
+]
+
+CALENDAR_EVENT_LINK_FALLBACK_SELECTORS = [
+    "a",
+    ".eventname a",
+    "[data-action='view-event']",
+    "a[href*='calendar/view.php']",
+    "a[href*='/mod/assign/']",
+    "a[href*='mod/assign/view.php']",
+]
+
+CALENDAR_DAY_NUMBER_FALLBACK_SELECTORS = [
+    "div.day",
+    ".day",
+    ".day-number",
+    ".calendar-day-number",
+    "[data-region='day-content']",
+    "a[data-action='view-day-link']",
+]
+
+
+def selector_candidates(primary: str, fallbacks: list[str]) -> list[str]:
+    """환경변수 selector를 먼저 쓰고, 이어서 코드에 내장된 후보를 중복 없이 반환합니다."""
+    candidates = []
+    for selector in [primary, *fallbacks]:
+        cleaned = clean_text(selector)
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+    return candidates
+
+
 def safe_text(parent, selector: str) -> str:
     """selector가 없거나 요소가 없어도 프로그램이 죽지 않도록 문자열을 안전하게 읽습니다."""
     if not selector:
         return ""
 
-    locator = parent.locator(selector).first
-    if locator.count() == 0:
+    try:
+        locator = parent.locator(selector).first
+        if locator.count() == 0:
+            return ""
+        return clean_text(locator.text_content() or "")
+    except Exception:
         return ""
-
-    return clean_text(locator.text_content() or "")
 
 
 def safe_attribute(parent, selector: str, attribute_name: str) -> str:
@@ -65,18 +135,41 @@ def safe_attribute(parent, selector: str, attribute_name: str) -> str:
     if not selector:
         return ""
 
-    locator = parent.locator(selector).first
-    if locator.count() == 0:
+    try:
+        locator = parent.locator(selector).first
+        if locator.count() == 0:
+            return ""
+        return clean_text(locator.get_attribute(attribute_name) or "")
+    except Exception:
         return ""
 
-    return clean_text(locator.get_attribute(attribute_name) or "")
+
+def safe_locator_count(parent, selector: str) -> int:
+    """selector 문법이 바뀌었거나 요소가 없어도 안전하게 count를 가져옵니다."""
+    try:
+        return parent.locator(selector).count()
+    except Exception:
+        return 0
 
 
 def get_text_if_exists(locator: Locator) -> str:
     """Locator가 실제 요소를 가리킬 때만 텍스트를 꺼냅니다."""
-    if locator.count() == 0:
+    try:
+        if locator.count() == 0:
+            return ""
+        return clean_text(locator.text_content() or "")
+    except Exception:
         return ""
-    return clean_text(locator.text_content() or "")
+
+
+def get_attribute_if_exists(locator: Locator, attribute_name: str) -> str:
+    """Locator가 있을 때만 속성값을 읽습니다."""
+    try:
+        if locator.count() == 0:
+            return ""
+        return clean_text(locator.get_attribute(attribute_name) or "")
+    except Exception:
+        return ""
 
 
 def first_non_empty_text(page: Page, selectors: list[str]) -> str:
@@ -87,6 +180,27 @@ def first_non_empty_text(page: Page, selectors: list[str]) -> str:
         text = safe_text(page, selector)
         if text:
             return text
+    return ""
+
+
+def first_visible_selector(page: Page, selectors: list[str]) -> str:
+    """여러 selector 중 페이지에 실제로 존재하는 첫 selector를 찾습니다."""
+    for selector in selectors:
+        if safe_locator_count(page, selector) > 0:
+            return selector
+    return ""
+
+
+def wait_for_any_selector(page: Page, selectors: list[str], timeout: int) -> str:
+    """여러 selector 후보 중 하나가 나타날 때까지 짧게 나눠 기다립니다."""
+    deadline = datetime.now().timestamp() + (timeout / 1000)
+
+    while datetime.now().timestamp() < deadline:
+        selector = first_visible_selector(page, selectors)
+        if selector:
+            return selector
+        page.wait_for_timeout(500)
+
     return ""
 
 
@@ -104,7 +218,15 @@ def first_non_empty_attribute(page: Page, selectors: list[str], attribute_name: 
 def build_day_cell_xpath_condition() -> str:
     """CALENDAR_DAY_CELL_SELECTOR 값을 XPath class 조건으로 바꿉니다."""
     class_tokens = []
-    for token in CALENDAR_DAY_CELL_SELECTOR.split(","):
+    day_cell_selector_candidates = [
+        CALENDAR_DAY_CELL_SELECTOR,
+        "td.day",
+        "td.duration_course",
+        ".day",
+        ".calendar-day",
+    ]
+
+    for token in ",".join(day_cell_selector_candidates).split(","):
         cleaned = token.strip()
         if "." in cleaned:
             class_tokens.append(cleaned.split(".")[-1])
@@ -118,8 +240,38 @@ def build_day_cell_xpath_condition() -> str:
 def find_parent_day_cell(event_item: Locator) -> Locator:
     """이벤트가 들어 있는 상위 날짜 셀을 찾습니다."""
     condition = build_day_cell_xpath_condition()
-    xpath = f"xpath=ancestor::*[self::td and ({condition})][1]"
+    xpath = (
+        "xpath=ancestor::*[self::td or self::div]"
+        f"[({condition}) or @data-day or @data-date or contains(@class, 'calendar-day')][1]"
+    )
     return event_item.locator(xpath).first
+
+
+def save_debug_snapshot(page: Page, label: str, reason: str) -> None:
+    """selector 실패를 분석할 수 있도록 선택적으로 HTML과 스크린샷을 저장합니다."""
+    if not SAVE_DEBUG_SNAPSHOT:
+        print(
+            "[INFO] 디버그 스냅샷 저장이 꺼져 있습니다. "
+            "필요하면 .env에서 SAVE_DEBUG_SNAPSHOT=true로 설정하세요."
+        )
+        return
+
+    safe_label = re.sub(r"[^0-9A-Za-z가-힣_-]+", "_", label).strip("_") or "snapshot"
+    timestamp = datetime.now(ZoneInfo(TIMEZONE)).strftime("%Y%m%d_%H%M%S")
+    debug_dir = Path(LOGS_DIR) / "lms_debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    html_path = debug_dir / f"{timestamp}_{safe_label}.html"
+    png_path = debug_dir / f"{timestamp}_{safe_label}.png"
+
+    html_path.write_text(page.content(), encoding="utf-8")
+    try:
+        page.screenshot(path=str(png_path), full_page=True)
+    except Exception as error:
+        print(f"[WARN] 디버그 스크린샷 저장 실패: {error}")
+
+    print(f"[INFO] LMS 디버그 HTML 저장: {html_path}")
+    print(f"[INFO] LMS 디버그 스크린샷 저장: {png_path}")
+    print(f"[INFO] 저장 사유: {reason}")
 
 
 def title_matches_keywords(title: str) -> bool:
@@ -131,7 +283,65 @@ def title_matches_keywords(title: str) -> bool:
 def extract_event_id_from_url(url: str) -> str:
     """캘린더 href의 #event_123 형태에서 event id를 찾습니다."""
     match = re.search(r"#event_(\d+)", url or "")
+    if match:
+        return match.group(1)
+
+    match = re.search(r"[?&]eventid=(\d+)", url or "", flags=re.IGNORECASE)
+    if match:
+        return match.group(1)
+
+    match = re.search(r"[?&]id=(\d+)", url or "", flags=re.IGNORECASE)
     return match.group(1) if match else ""
+
+
+def extract_event_id_from_item(event_item: Locator, event_url: str) -> str:
+    """URL과 data 속성에서 이벤트 ID를 최대한 찾습니다."""
+    event_id = extract_event_id_from_url(event_url)
+    if event_id:
+        return event_id
+
+    for attribute_name in ["data-event-id", "data-eventid", "data-id", "id"]:
+        value = get_attribute_if_exists(event_item, attribute_name)
+        if not value:
+            continue
+        match = re.search(r"\d+", value)
+        if match:
+            return match.group()
+
+    return ""
+
+
+def parse_date_from_text(value: str, year: int) -> Optional[datetime]:
+    """텍스트 속 날짜 표현에서 날짜만 추출합니다."""
+    text = clean_text(value)
+    if not text:
+        return None
+
+    patterns = [
+        r"(\d{4})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})",
+        r"(\d{1,2})[-./월\s]+(\d{1,2})[-./일\s]*",
+    ]
+
+    match = re.search(patterns[0], text)
+    if match:
+        parsed_year = int(match.group(1))
+        parsed_month = int(match.group(2))
+        parsed_day = int(match.group(3))
+        try:
+            return datetime(parsed_year, parsed_month, parsed_day, 23, 59, tzinfo=ZoneInfo(TIMEZONE))
+        except ValueError:
+            return None
+
+    match = re.search(patterns[1], text)
+    if match:
+        parsed_month = int(match.group(1))
+        parsed_day = int(match.group(2))
+        try:
+            return datetime(year, parsed_month, parsed_day, 23, 59, tzinfo=ZoneInfo(TIMEZONE))
+        except ValueError:
+            return None
+
+    return None
 
 
 def is_manual_login_completed(page: Page) -> bool:
@@ -237,10 +447,36 @@ def resolve_calendar_year_month(page: Page) -> tuple[int, int]:
     4. 페이지 제목이나 본문에서 '2026년 4월' 같은 문자열 찾기
     5. 마지막 fallback으로 현재 로컬 시간
     """
-    current_month_text = safe_text(page, CURRENT_MONTH_SELECTOR)
+    current_month_text = first_non_empty_text(
+        page,
+        selector_candidates(CURRENT_MONTH_SELECTOR, CURRENT_MONTH_FALLBACK_SELECTORS),
+    )
     match = re.search(r"(\d{4})\s*년\s*(\d{1,2})\s*월", current_month_text or "")
     if match:
         return int(match.group(1)), int(match.group(2))
+
+    match = re.search(
+        r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})",
+        current_month_text or "",
+        flags=re.IGNORECASE,
+    )
+    if match:
+        month_name = match.group(1).lower()
+        month_index = [
+            "january",
+            "february",
+            "march",
+            "april",
+            "may",
+            "june",
+            "july",
+            "august",
+            "september",
+            "october",
+            "november",
+            "december",
+        ].index(month_name) + 1
+        return int(match.group(2)), month_index
 
     parsed = urlparse(page.url)
     query = parse_qs(parsed.query)
@@ -260,6 +496,28 @@ def resolve_calendar_year_month(page: Page) -> tuple[int, int]:
         match = re.search(r"(\d{4})\s*년\s*(\d{1,2})\s*월", text or "")
         if match:
             return int(match.group(1)), int(match.group(2))
+        match = re.search(
+            r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})",
+            text or "",
+            flags=re.IGNORECASE,
+        )
+        if match:
+            month_name = match.group(1).lower()
+            month_index = [
+                "january",
+                "february",
+                "march",
+                "april",
+                "may",
+                "june",
+                "july",
+                "august",
+                "september",
+                "october",
+                "november",
+                "december",
+            ].index(month_name) + 1
+            return int(match.group(2)), month_index
 
     now = datetime.now(ZoneInfo(TIMEZONE))
     return now.year, now.month
@@ -278,6 +536,36 @@ def build_due_at_from_day_number(year: int, month: int, day_number_text: str) ->
     return datetime(year, month, day, 23, 59, tzinfo=ZoneInfo(TIMEZONE))
 
 
+def build_due_at_from_event_item(event_item: Locator, year: int, month: int) -> Optional[datetime]:
+    """이벤트가 속한 날짜 셀/속성/텍스트에서 due_at을 최대한 복원합니다."""
+    day_cell = find_parent_day_cell(event_item)
+
+    for attribute_name in ["data-date", "data-day", "aria-label", "title"]:
+        value = get_attribute_if_exists(day_cell, attribute_name)
+        due_at = parse_date_from_text(value, year)
+        if due_at:
+            return due_at
+
+    day_number_selectors = selector_candidates(
+        CALENDAR_DAY_NUMBER_SELECTOR,
+        CALENDAR_DAY_NUMBER_FALLBACK_SELECTORS,
+    )
+    for selector in day_number_selectors:
+        day_number_text = safe_text(day_cell, selector)
+        due_at = build_due_at_from_day_number(year, month, day_number_text)
+        if due_at:
+            return due_at
+
+    for attribute_name in ["data-date", "data-day", "aria-label", "title"]:
+        value = get_attribute_if_exists(event_item, attribute_name)
+        due_at = parse_date_from_text(value, year)
+        if due_at:
+            return due_at
+
+    # 마지막으로 주변 텍스트에서 날짜를 찾아봅니다. 너무 넓게 잡으면 오탐이 생겨 fallback으로만 둡니다.
+    return parse_date_from_text(get_text_if_exists(day_cell), year)
+
+
 def build_calendar_event_dedupe_key(event: dict) -> str:
     """캘린더 이벤트 단계에서 사용할 중복 제거 키를 만듭니다."""
     if event["event_id"]:
@@ -294,6 +582,37 @@ def is_due_at_within_collection_window(
     return window_start <= due_at < window_end
 
 
+def get_event_link_info(event_item: Locator) -> tuple[str, str]:
+    """이벤트 요소에서 제목과 링크를 찾습니다."""
+    link_selectors = selector_candidates(
+        CALENDAR_EVENT_LINK_SELECTOR,
+        CALENDAR_EVENT_LINK_FALLBACK_SELECTORS,
+    )
+
+    for selector in link_selectors:
+        link_locator = event_item.locator(selector).first
+        if link_locator.count() == 0:
+            continue
+
+        href = get_attribute_if_exists(link_locator, "href")
+        title = (
+            get_text_if_exists(link_locator)
+            or get_attribute_if_exists(link_locator, "title")
+            or get_attribute_if_exists(link_locator, "aria-label")
+        )
+
+        if href or title:
+            return title, href
+
+    href = get_attribute_if_exists(event_item, "href")
+    title = (
+        get_text_if_exists(event_item)
+        or get_attribute_if_exists(event_item, "title")
+        or get_attribute_if_exists(event_item, "aria-label")
+    )
+    return title, href
+
+
 def collect_calendar_events_for_month(page: Page, target_year: int, target_month: int) -> list[dict]:
     """특정 월의 월간 캘린더 페이지에서 이벤트 목록을 수집합니다."""
     target_label = f"{target_year:04d}-{target_month:02d}"
@@ -301,16 +620,28 @@ def collect_calendar_events_for_month(page: Page, target_year: int, target_month
 
     month_url = build_month_page_url(ASSIGNMENTS_URL, target_year, target_month)
     page.goto(month_url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS)
-    try:
-        page.wait_for_selector(CALENDAR_TABLE_SELECTOR, timeout=PAGE_TIMEOUT_MS)
-    except Exception as error:
+    root_selectors = selector_candidates(CALENDAR_TABLE_SELECTOR, CALENDAR_ROOT_FALLBACK_SELECTORS)
+    matched_root_selector = wait_for_any_selector(page, root_selectors, PAGE_TIMEOUT_MS)
+    if not matched_root_selector:
+        save_debug_snapshot(page, f"calendar_root_missing_{target_label}", "캘린더 루트 selector 탐색 실패")
         raise RuntimeError(
             "캘린더 테이블 selector를 찾지 못했습니다. "
-            f"CALENDAR_TABLE_SELECTOR={CALENDAR_TABLE_SELECTOR!r} / {error}"
-        ) from error
+            f"시도한 selector={root_selectors!r}"
+        )
+
+    print(f"[INFO] 캘린더 루트 selector 사용: {matched_root_selector}")
 
     events = []
-    event_items = page.locator(CALENDAR_EVENT_SELECTOR)
+    event_selectors = selector_candidates(CALENDAR_EVENT_SELECTOR, CALENDAR_EVENT_FALLBACK_SELECTORS)
+    matched_event_selector = first_visible_selector(page, event_selectors)
+    if not matched_event_selector:
+        save_debug_snapshot(page, f"calendar_events_missing_{target_label}", "캘린더 이벤트 selector 탐색 실패")
+        print(f"[WARN] 캘린더 이벤트 selector를 찾지 못했습니다. 시도한 selector={event_selectors!r}")
+        return []
+
+    print(f"[INFO] 캘린더 이벤트 selector 사용: {matched_event_selector}")
+
+    event_items = page.locator(matched_event_selector)
     event_count = event_items.count()
     current_year, current_month = resolve_calendar_year_month(page)
     print(f"[INFO] 현재 캘린더 기준 연월: {current_year:04d}-{current_month:02d}")
@@ -319,23 +650,15 @@ def collect_calendar_events_for_month(page: Page, target_year: int, target_month
 
     for index in range(event_count):
         event_item = event_items.nth(index)
-        link_locator = event_item.locator(CALENDAR_EVENT_LINK_SELECTOR).first
-
-        if link_locator.count() == 0:
-            continue
-
-        title = get_text_if_exists(link_locator)
-        href = clean_text(link_locator.get_attribute("href") or "")
+        title, href = get_event_link_info(event_item)
         absolute_url = urljoin(BASE_URL, href) if href else ""
-        day_cell = find_parent_day_cell(event_item)
-        day_number_text = safe_text(day_cell, CALENDAR_DAY_NUMBER_SELECTOR)
-        due_at = build_due_at_from_day_number(current_year, current_month, day_number_text)
-        event_id = extract_event_id_from_url(absolute_url)
+        due_at = build_due_at_from_event_item(event_item, current_year, current_month)
+        event_id = extract_event_id_from_item(event_item, absolute_url)
         if due_at is None:
             _, last_day = calendar.monthrange(current_year, current_month)
             print(
                 "[건너뜀] 유효하지 않은 캘린더 날짜입니다: "
-                f"year={current_year}, month={current_month}, day_text={day_number_text!r}, "
+                f"year={current_year}, month={current_month}, title={title!r}, "
                 f"허용범위=1~{last_day}"
             )
             continue

@@ -21,7 +21,7 @@ GitHub Releases에서 최신 macOS 배포 파일을 내려받을 수 있습니�
 Apple Silicon Mac은 다음 파일을 권장합니다.
 
 ```text
-INU Assignment Sync-0.1.0-arm64.dmg
+INU Assignment Sync-0.1.1-arm64.dmg
 ```
 
 설치 방법:
@@ -57,6 +57,7 @@ INU Assignment Sync-0.1.0-arm64.dmg
 - `DRY_RUN`
 - 알림 시간
 - 로그인 자동 감지 대기 시간
+- LMS 진단 스냅샷 저장 여부
 
 설정을 바꾼 뒤 `설정 저장`을 누르면 Application Support 폴더의 `.env`에 저장됩니다.
 
@@ -177,7 +178,9 @@ xattr -dr com.apple.quarantine "/Applications/INU Assignment Sync.app"
 
 - 수집 개월 범위를 확인합니다.
 - 해당 월에 LMS 캘린더 과제가 실제로 있는지 확인합니다.
-- INU LMS HTML 구조가 바뀌었다면 selector 수정이 필요할 수 있습니다.
+- INU LMS HTML 구조가 바뀌었다면 앱 설정에서 `진단 저장`을 켠 뒤 다시 실행하세요.
+- 진단 파일은 `~/Library/Application Support/INU Assignment Sync/logs/lms_debug/`에 저장됩니다.
+- 진단 파일에는 LMS 화면 내용이 포함될 수 있으니 공개 이슈에 올릴 때는 이름, 과목, 개인정보를 가려 주세요.
 
 ## 개발자용 실행
 

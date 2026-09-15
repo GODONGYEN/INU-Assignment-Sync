@@ -71,6 +71,7 @@ HEADLESS = get_bool("HEADLESS", False)
 SLOW_MO_MS = get_int("SLOW_MO_MS", 0)
 PAGE_TIMEOUT_MS = get_int("PAGE_TIMEOUT_MS", 15000)
 LOGIN_WAIT_TIMEOUT_MS = get_int("LOGIN_WAIT_TIMEOUT_MS", 180000)
+SAVE_DEBUG_SNAPSHOT = get_bool("SAVE_DEBUG_SNAPSHOT", False)
 
 
 # --------------------------------------------
