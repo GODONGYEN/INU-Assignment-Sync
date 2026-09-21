@@ -1,6 +1,6 @@
 # INU Assignment Sync
 
-INU LMS 과제 일정을 수집해서 macOS 기본 Calendar 앱에 동기화하는 macOS 데스크톱 앱입니다.
+INU LMS 과제 일정을 수집해서 macOS Calendar 또는 Windows의 Outlook 캘린더에 동기화하는 데스크톱 앱입니다. ICS 파일 내보내기도 지원합니다.
 
 이 앱은 Electron + React GUI 위에서 기존 Python 동기화 엔진을 실행합니다. 사용자는 터미널에서 `npm run dev`를 실행할 필요 없이, 빌드된 `.app`을 더블클릭해서 사용할 수 있습니다.
 
@@ -11,6 +11,10 @@ INU LMS 과제 일정을 수집해서 macOS 기본 Calendar 앱에 동기화하�
 - CAPTCHA, SSO, 학교 보안장치 우회 기능은 없습니다.
 - 비밀번호를 코드나 설정 파일에 저장하지 않습니다.
 - 처음에는 `DRY_RUN=true`로 테스트하는 것을 권장합니다.
+
+## Windows 버전
+
+Windows x64 설치 파일과 Outlook 연결/ICS 내보내기 방법은 [Windows 안내](docs/windows.md)를 참고하세요. Outlook 자동 동기화에는 Microsoft 앱 등록 ID가 필요하며, 계정 연결 없이 쓰려면 ICS 내보내기를 선택할 수 있습니다.
 
 ## 앱 설치
 

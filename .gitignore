@@ -13,3 +13,5 @@ electron-app/node_modules/
 electron-app/dist/
 electron-app/.vite/
 electron-app/release/
+electron-app/python-runtime/
+data/*.ics

@@ -1,6 +1,6 @@
 [project]
 name = "inu-assignment-sync"
-version = "0.1.0"
+version = "0.2.0"
 description = "INU LMS assignment sync tool for macOS Calendar"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -11,7 +11,9 @@ authors = [
 dependencies = [
   "playwright==1.53.0",
   "python-dotenv==1.1.1",
-  "customtkinter==5.2.2"
+  "customtkinter==5.2.2",
+  "msal>=1.31,<2",
+  "tzdata>=2025.1"
 ]
 
 [project.scripts]

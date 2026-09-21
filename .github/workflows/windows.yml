@@ -1,0 +1,62 @@
+name: Windows installer
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: electron-app/package-lock.json
+      - name: Install backend dependencies and test browser
+        run: |
+          python -m pip install -r requirements.txt
+          python -m playwright install chromium
+      - name: Test backend on Windows
+        env:
+          BASE_URL: https://lms.inu.ac.kr
+          ASSIGNMENTS_URL: https://lms.inu.ac.kr/
+          PYTHONUTF8: '1'
+        run: |
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m compileall -q main.py src
+      - name: Install frontend dependencies
+        working-directory: electron-app
+        run: npm ci
+      - name: Test platform paths
+        working-directory: electron-app
+        run: npm test
+      - name: Bundle Python runtime
+        run: python scripts/bundle_windows_python.py
+      - name: Build Windows installer
+        working-directory: electron-app
+        run: npm run dist:win
+      - name: Test packaged Python from a Unicode path
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'INU 설치 테스트'
+          Copy-Item -Recurse 'electron-app/release/win-unpacked/resources' $target
+          $env:PYTHONPATH = Join-Path $target 'python'
+          & (Join-Path $target 'python-runtime/python.exe') -c "import msal, dotenv; from zoneinfo import ZoneInfo; from src.new_lms import parse_assignment_deadline; assert parse_assignment_deadline('종료 일시 2026-10-02 18:30:00').hour == 18; print(ZoneInfo('Asia/Seoul'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $target 'python-runtime/python.exe') -m venv (Join-Path $env:RUNNER_TEMP 'inu-venv')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: INU-Assignment-Sync-Windows-x64
+          path: electron-app/release/*windows-x64.exe
+          if-no-files-found: error
+          retention-days: 30

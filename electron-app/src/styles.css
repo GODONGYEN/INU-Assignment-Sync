@@ -331,3 +331,6 @@ body {
     @apply rounded-2xl border border-white/10 bg-black/20 px-4 py-3 font-mono text-xs;
   }
 }
+
+.field select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 12px; background: white; color: #0f172a; font: inherit; }
+.field small { line-height: 1.5; color: #64748b; }

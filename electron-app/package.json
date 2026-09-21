@@ -1,6 +1,6 @@
 {
   "name": "inu-assignment-sync-electron",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Electron desktop GUI for INU Assignment Sync",
   "type": "module",
@@ -15,7 +15,9 @@
     "build": "npm run dist",
     "build:release": "npm run dist",
     "start": "electron .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dist:win": "npm run build:renderer && electron-builder --win nsis --x64 --publish never",
+    "test": "node --test"
   },
   "author": "INU Assignment Sync Contributors",
   "license": "MIT",
@@ -70,6 +72,10 @@
       {
         "from": "../README.md",
         "to": "python/README.md"
+      },
+      {
+        "from": "../docs",
+        "to": "python/docs"
       }
     ],
     "asar": true,
@@ -86,6 +92,33 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist"
     },
-    "artifactName": "${productName}-${version}-${arch}.${ext}"
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "python-runtime",
+          "to": "python-runtime",
+          "filter": [
+            "**/*",
+            "!**/__pycache__/**"
+          ]
+        }
+      ],
+      "artifactName": "INU-Assignment-Sync-${version}-windows-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
   }
 }

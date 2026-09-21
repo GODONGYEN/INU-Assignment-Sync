@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -129,3 +130,10 @@ INCLUDE_KEYWORDS = get_list(
     "INCLUDE_KEYWORDS",
     ["과제", "assignment", "Assign", "Submission", "제출", "연습문제", "lab", "quiz"],
 )
+
+# macOS uses Apple Calendar; Windows defaults to Outlook. ICS is available on both.
+CALENDAR_BACKEND = os.getenv("CALENDAR_BACKEND", "auto").strip().lower()
+if CALENDAR_BACKEND == "auto":
+    CALENDAR_BACKEND = "outlook" if sys.platform == "win32" else "apple"
+OUTLOOK_CLIENT_ID = os.getenv("OUTLOOK_CLIENT_ID", "").strip()
+ICS_PATH = DATA_DIR / "inu-assignments.ics"

@@ -1,13 +1,9 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from src.calendar_sync import (
-    create_calendar_event,
-    ensure_calendar_exists,
-    find_existing_calendar_event,
-    update_calendar_event,
-)
-from src.config import CALENDAR_NAME, DRY_RUN, ENV_EXAMPLE_PATH, ENV_PATH, LOG_FILE_PATH, INCLUDE_PAST_ASSIGNMENTS, TIMEZONE
+from src import calendar_sync as apple_calendar
+
+from src.config import CALENDAR_BACKEND, OUTLOOK_CLIENT_ID, ICS_PATH, DATABASE_PATH, EVENT_DURATION_MINUTES, REMINDER_MINUTES, CALENDAR_NAME, DRY_RUN, ENV_EXAMPLE_PATH, ENV_PATH, LOG_FILE_PATH, INCLUDE_PAST_ASSIGNMENTS, TIMEZONE
 from src.logging_utils import attach_stdout_stderr_to_logger, setup_file_logging
 from src.normalizer import normalize_assignment
 from src.scraper import login_and_collect_assignments
@@ -31,6 +27,20 @@ def assignment_changed(saved_row: dict, normalized_assignment) -> bool:
 
 def main() -> None:
     """프로그램 전체 흐름을 순서대로 실행합니다."""
+    create_calendar_event = apple_calendar.create_calendar_event
+    ensure_calendar_exists = apple_calendar.ensure_calendar_exists
+    find_existing_calendar_event = apple_calendar.find_existing_calendar_event
+    update_calendar_event = apple_calendar.update_calendar_event
+    outlook = None
+    if CALENDAR_BACKEND == "outlook":
+        from src.outlook_sync import OutlookCalendar
+        outlook = OutlookCalendar(OUTLOOK_CLIENT_ID)
+        create_calendar_event = outlook.create_calendar_event
+        ensure_calendar_exists = outlook.ensure_calendar_exists
+        find_existing_calendar_event = outlook.find_existing_calendar_event
+        update_calendar_event = outlook.update_calendar_event
+    elif CALENDAR_BACKEND not in {"apple", "ics"}:
+        raise ValueError("지원하지 않는 Calendar 방식입니다.")
     logger = setup_file_logging(LOG_FILE_PATH)
     attach_stdout_stderr_to_logger(logger)
 
@@ -46,7 +56,7 @@ def main() -> None:
         raw_assignments = login_and_collect_assignments()
     except Exception as error:
         print(f"[ERROR] LMS 수집 시작 실패: {error}")
-        return
+        raise SystemExit(1)
 
     print("2) 과제 데이터를 표준 형식으로 정리하는 중입니다...")
     normalized_assignments = []
@@ -71,18 +81,36 @@ def main() -> None:
         print("[ERROR] 과제가 0개 수집되었습니다. 로그인 상태, 캘린더 범위, selector 설정을 확인해 주세요.")
         return
 
-    try:
-        store = SQLiteSyncStore()
-    except Exception as error:
-        print(f"[ERROR] SQLite DB 오류: {error}")
+    if CALENDAR_BACKEND == "ics":
+        from src.ics_export import export_calendar
+        now = datetime.now(ZoneInfo(TIMEZONE))
+        targets = [a for a in normalized_assignments if INCLUDE_PAST_ASSIGNMENTS or a.due_at >= now]
+        if DRY_RUN:
+            print(f"[DRY-RUN] ICS 내보내기 예정: {len(targets)}개 (파일을 쓰지 않습니다)")
+        else:
+            export_calendar(targets, ICS_PATH, CALENDAR_NAME, EVENT_DURATION_MINUTES, REMINDER_MINUTES)
+            print(f"[OK] ICS 파일 저장: {ICS_PATH}")
+            print("[INFO] Outlook에서 일정 추가 → 파일에서 업로드로 가져오세요. 파일은 자동 동기화되지 않습니다.")
+        print(f"[INFO] 신규 등록 대상: {len(targets)}")
         return
 
     if not DRY_RUN:
         try:
             ensure_calendar_exists(CALENDAR_NAME)
         except Exception as error:
-            print(f"[ERROR] macOS Calendar 권한 또는 AppleScript 오류: {error}")
-            return
+            print(f"[ERROR] 캘린더 연결 실패: {error}")
+            raise SystemExit(1)
+
+    try:
+        # Outlook account + target calendar have separate histories from Apple Calendar.
+        db_path = DATABASE_PATH
+        if outlook:
+            scope = outlook.scope_id or "preview"
+            db_path = DATABASE_PATH.with_name(f"outlook-{scope}.sqlite3")
+        store = SQLiteSyncStore(db_path)
+    except Exception as error:
+        print(f"[ERROR] SQLite DB 오류: {error}")
+        raise SystemExit(1)
 
     now = datetime.now(ZoneInfo(TIMEZONE))
 
@@ -98,12 +126,14 @@ def main() -> None:
             saved_event_uid = saved_row["event_uid"] if saved_row is not None else None
             calendar_event_uid = saved_event_uid
             if not DRY_RUN:
-                calendar_event_uid = saved_event_uid or find_existing_calendar_event(assignment)
+                calendar_event_uid = find_existing_calendar_event(assignment) if outlook else (saved_event_uid or find_existing_calendar_event(assignment))
             is_past_assignment = assignment.due_at < now
 
             # 이미 Calendar에 있으면 새로 만들지 않고 연결만 저장합니다.
             if saved_row is None and calendar_event_uid is not None:
                 if not DRY_RUN:
+                    if outlook:
+                        calendar_event_uid = update_calendar_event(calendar_event_uid, assignment)
                     store.upsert_assignment(assignment, calendar_event_uid)
                 skip_count += 1
                 print(f"[SKIP] Calendar에 이미 존재: {assignment.event_title}")
@@ -158,6 +188,7 @@ def main() -> None:
     print(f"[INFO] 스킵: {skip_count}")
     if error_count:
         print(f"[ERROR] 실패: {error_count}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

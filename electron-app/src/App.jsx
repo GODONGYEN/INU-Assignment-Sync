@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 
 const DEFAULT_SETTINGS = {
   BASE_URL: "https://lms.inu.ac.kr",
+  CALENDAR_BACKEND: "auto",
+  OUTLOOK_CLIENT_ID: "",
   CALENDAR_NAME: "INU 과제",
   CALENDAR_MONTHS_BACK: "2",
   CALENDAR_MONTHS_FORWARD: "6",
@@ -61,6 +63,8 @@ function buildInitialStatuses(settings) {
 function normalizeSettings(settings) {
   return {
     BASE_URL: settings.BASE_URL ?? DEFAULT_SETTINGS.BASE_URL,
+    CALENDAR_BACKEND: settings.CALENDAR_BACKEND ?? "auto",
+    OUTLOOK_CLIENT_ID: settings.OUTLOOK_CLIENT_ID ?? "",
     CALENDAR_NAME: settings.CALENDAR_NAME ?? DEFAULT_SETTINGS.CALENDAR_NAME,
     CALENDAR_MONTHS_BACK: settings.CALENDAR_MONTHS_BACK ?? DEFAULT_SETTINGS.CALENDAR_MONTHS_BACK,
     CALENDAR_MONTHS_FORWARD: settings.CALENDAR_MONTHS_FORWARD ?? DEFAULT_SETTINGS.CALENDAR_MONTHS_FORWARD,
@@ -104,6 +108,8 @@ export default function App() {
   const [apiMissing, setApiMissing] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState(() => localStorage.getItem("inuSync:lastSyncAt") ?? "-");
+  const backend = settings.CALENDAR_BACKEND === "auto" ? (appState?.platform === "win32" ? "outlook" : "apple") : settings.CALENDAR_BACKEND;
+  const calendarLabel = backend === "ics" ? "ICS 파일" : backend === "outlook" ? "Outlook 캘린더" : "macOS Calendar";
   const dryRunEnabled = settings.DRY_RUN === "true";
   const includePastAssignments = settings.INCLUDE_PAST_ASSIGNMENTS === "true";
   const debugSnapshotEnabled = settings.SAVE_DEBUG_SNAPSHOT === "true";
@@ -332,6 +338,8 @@ export default function App() {
 
     const updates = {
       BASE_URL: settings.BASE_URL.trim(),
+      CALENDAR_BACKEND: settings.CALENDAR_BACKEND,
+      OUTLOOK_CLIENT_ID: settings.OUTLOOK_CLIENT_ID.trim(),
       CALENDAR_NAME: settings.CALENDAR_NAME.trim(),
       CALENDAR_MONTHS_BACK: settings.CALENDAR_MONTHS_BACK.trim(),
       CALENDAR_MONTHS_FORWARD: settings.CALENDAR_MONTHS_FORWARD.trim(),
@@ -372,6 +380,10 @@ export default function App() {
       return;
     }
 
+    if (!forceDryRun && settings.DRY_RUN !== "true" && backend === "outlook" && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(settings.OUTLOOK_CLIENT_ID.trim())) {
+      setStatusMessage("Outlook 앱 등록 ID를 입력하거나 ICS 파일 내보내기를 선택하세요.");
+      return;
+    }
     const saved = await saveSettings();
     if (!saved) {
       return;
@@ -436,11 +448,11 @@ export default function App() {
       <div className="app-container">
         <header className="hero-card">
           <div className="hero-copy">
-            <p className="hero-kicker">INU LMS → macOS Calendar</p>
+            <p className="hero-kicker">INU LMS → {calendarLabel}</p>
             <h1>과제 마감일을 캘린더에 자동 정리합니다</h1>
             <p className="hero-subtitle">INU Assignment Sync</p>
             <p className="hero-description">
-              브라우저에서 직접 로그인하면 앱이 LMS 수강 강좌의 과제를 읽고, 과제 마감일을 macOS Calendar 일정으로 동기화합니다.
+              브라우저에서 직접 로그인하면 앱이 LMS 수강 강좌의 과제를 읽고, 과제 마감일을 {calendarLabel}로 정리합니다.
               비밀번호는 저장하지 않고, 처음에는 DRY RUN으로 안전하게 확인할 수 있습니다.
             </p>
             <div className="hero-actions">
@@ -448,7 +460,7 @@ export default function App() {
                 DRY RUN으로 먼저 확인
               </button>
               <button className="soft-button hero-button" disabled={isRunning || !api} onClick={() => runSync(false)} type="button">
-                Calendar에 동기화
+                {backend === "ics" ? "ICS 파일 내보내기" : `${calendarLabel}에 동기화`}
               </button>
             </div>
           </div>
@@ -481,7 +493,7 @@ export default function App() {
             <span className="workflow-step">3</span>
             <div>
               <h2>Calendar 반영</h2>
-              <p>중복은 건너뛰고, 마감일이 바뀐 일정은 업데이트합니다.</p>
+              <p>{backend === "ics" ? "파일을 내보낸 후 Outlook에서 직접 가져옵니다. 자동 갱신되지 않습니다." : "중복은 건너뛰고, 마감일이 바뀐 일정은 업데이트합니다."}</p>
             </div>
           </article>
         </section>
@@ -510,7 +522,7 @@ export default function App() {
 
         <section className="notice-banner notice-banner-safe">
           <strong>Calendar 권한 안내</strong>
-          <span>오류가 나면 시스템 설정 &gt; 개인정보 보호 및 보안 &gt; 캘린더에서 앱 권한을 확인하고, 처음에는 DRY RUN으로 테스트하세요.</span>
+          <span>{backend === "apple" ? "시스템 설정 → 개인정보 보호 및 보안 → 캘린더에서 앱 권한을 확인하세요." : backend === "outlook" ? "Microsoft 계정으로 로그인해 캘린더 권한에 동의합니다. Outlook은 가장 가까운 알림 시간 한 개를 사용합니다. DRY RUN은 Outlook에 접속하지 않으므로 신규/수정 구분은 미리보기입니다." : "내보낸 파일은 Outlook의 일정 추가 → 파일에서 업로드로 가져오세요. 재가져오기는 중복을 만들 수 있으며 자동 갱신되지 않습니다."}</span>
         </section>
 
         <section className="dashboard-grid">
@@ -527,6 +539,22 @@ export default function App() {
               </div>
 
               <div className="form-grid">
+                <label className="field field-full">
+                  <span>캘린더 연결 방식</span>
+                  <select value={settings.CALENDAR_BACKEND} onChange={(event) => setSettings(previous => ({...previous, CALENDAR_BACKEND: event.target.value}))}>
+                    <option value="auto">자동 (Mac: Apple / Windows: Outlook)</option>
+                    <option value="outlook">Outlook 자동 동기화</option>
+                    <option value="ics">ICS 파일 내보내기 (계정 연결 불필요)</option>
+                    {appState?.platform !== "win32" && <option value="apple">Apple Calendar</option>}
+                  </select>
+                </label>
+                {backend === "outlook" && <label className="field field-full">
+                  <span>Outlook 앱 등록 ID</span>
+                  <input placeholder="Microsoft Entra Application (client) ID" value={settings.OUTLOOK_CLIENT_ID}
+                    onChange={event => setSettings(previous => ({...previous, OUTLOOK_CLIENT_ID: event.target.value}))} />
+                  <small>최초 한 번 앱 등록이 필요합니다. README의 Windows 안내를 참고하세요. 비밀번호나 Client Secret은 입력하지 않습니다.</small>
+                </label>}
+                {backend === "ics" && <button type="button" className="soft-button" onClick={() => api?.openExports()}>내보낸 파일 폴더 열기</button>}
                 <label className="field">
                   <span>BASE_URL</span>
                   <input disabled readOnly value={settings.BASE_URL} />
@@ -624,7 +652,7 @@ export default function App() {
                 <span>
                   {dryRunEnabled
                     ? "일정은 만들지 않고 어떤 과제가 등록될지 로그로만 확인합니다."
-                    : "중복 검사를 거친 뒤 macOS Calendar에 일정을 추가하거나 수정합니다."}
+                    : "중복 검사를 거친 뒤 선택한 캘린더에 일정을 반영합니다. ICS 모드는 파일만 저장합니다."}
                 </span>
                 {debugSnapshotEnabled ? (
                   <span>selector 수집에 실패하면 Application Support의 logs/lms_debug에 진단 파일을 저장합니다.</span>

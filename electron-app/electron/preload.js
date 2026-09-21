@@ -7,6 +7,7 @@ const api = {
   clearLogFile: () => ipcRenderer.invoke("log:clear"),
   openLogFile: () => ipcRenderer.invoke("log:open"),
   openSupportFolder: () => ipcRenderer.invoke("support:open"),
+  openExports: () => ipcRenderer.invoke("export:open"),
   openReadme: () => ipcRenderer.invoke("readme:open"),
   checkDependencies: () => ipcRenderer.invoke("dependencies:check"),
   installDependencies: () => ipcRenderer.invoke("dependencies:install"),

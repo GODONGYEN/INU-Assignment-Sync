@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { venvPython, pythonPath } from "./python-paths.js";
 
 app.setName("INU Assignment Sync");
 
@@ -25,6 +26,8 @@ const DEFAULT_SETTINGS = {
   LOGIN_WAIT_TIMEOUT_MS: "180000",
   SAVE_DEBUG_SNAPSHOT: "false",
   CALENDAR_NAME: "INU 과제",
+  CALENDAR_BACKEND: "auto",
+  OUTLOOK_CLIENT_ID: "",
   EVENT_DURATION_MINUTES: "30",
   TIMEZONE: "Asia/Seoul",
   DATABASE_PATH: "data/sync_state.sqlite3",
@@ -227,30 +230,30 @@ function executableExists(filePath) {
   }
 }
 
+function bundledPython() {
+  return path.join(process.resourcesPath || "", "python-runtime", "python.exe");
+}
+
 function choosePythonExecutable({ allowSystemFallback = true } = {}) {
-  const supportPaths = getSupportPaths();
-  const userVenvPython3 = path.join(supportPaths.venvDir, "bin", "python3");
-  const userVenvPython = path.join(supportPaths.venvDir, "bin", "python");
-  const projectVenvPython3 = path.join(PROJECT_ROOT, ".venv", "bin", "python3");
-  const projectVenvPython = path.join(PROJECT_ROOT, ".venv", "bin", "python");
-
-  for (const candidate of [userVenvPython3, userVenvPython, projectVenvPython3, projectVenvPython]) {
-    if (executableExists(candidate)) {
-      return candidate;
-    }
+  for (const candidate of [venvPython(getSupportPaths().venvDir),
+    ...(process.platform === "win32" && isPackagedRuntime() ? [bundledPython()] : []),
+    venvPython(path.join(PROJECT_ROOT, ".venv"))]) {
+    if (executableExists(candidate)) return candidate;
   }
-
-  return allowSystemFallback ? "python3" : "";
+  return allowSystemFallback ? (process.platform === "win32" ? "python" : "python3") : "";
 }
 
 function createPythonEnv(settings = {}) {
   const supportPaths = getSupportPaths();
   const codePaths = getCodePaths();
-  const existingPythonPath = process.env.PYTHONPATH ? `${codePaths.codeRoot}:${process.env.PYTHONPATH}` : codePaths.codeRoot;
+  const existingPythonPath = pythonPath(codePaths.codeRoot, process.env.PYTHONPATH);
 
   return {
     ...process.env,
     ...settings,
+    PYTHONUTF8: "1",
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUNBUFFERED: "1",
     GUI_MODE: "true",
     USE_MANUAL_LOGIN: "true",
     PYTHONPATH: existingPythonPath,
@@ -267,6 +270,7 @@ function runProcess(command, args, options = {}) {
     const child = spawn(command, args, {
       cwd: options.cwd ?? getCodeRoot(),
       env: options.env ?? createPythonEnv(),
+      windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -311,10 +315,15 @@ async function checkPythonDependencies() {
   const code = [
     "import sys",
     "missing=[]",
-    "mods=['dotenv','playwright']",
+    "mods=['dotenv','playwright','msal','tzdata']",
     "for mod in mods:",
     "    try: __import__(mod)",
     "    except Exception: missing.append(mod)",
+    "if not missing:",
+    "    from pathlib import Path",
+    "    from playwright.sync_api import sync_playwright",
+    "    with sync_playwright() as p:",
+    "        if not Path(p.chromium.executable_path).exists(): missing.append('chromium')",
     "print(sys.executable)",
     "raise SystemExit(1 if missing else 0)",
   ].join("\n");
@@ -347,30 +356,22 @@ async function installPythonDependencies() {
     };
   }
 
-  const basePython = executableExists(path.join(supportPaths.venvDir, "bin", "python3"))
-    ? path.join(supportPaths.venvDir, "bin", "python3")
-    : "python3";
-
+  const userPython = venvPython(supportPaths.venvDir);
+  const basePython = choosePythonExecutable();
   fs.mkdirSync(supportPaths.supportRoot, { recursive: true });
-
-  if (!fs.existsSync(path.join(supportPaths.venvDir, "bin", "python3"))) {
+  if (!executableExists(userPython)) {
     sendSyncOutput("[INFO] 앱 전용 Python 가상환경을 생성합니다.\n");
-    const venvResult = await runProcess(basePython, ["-m", "venv", supportPaths.venvDir], {
-      cwd: supportPaths.supportRoot,
-      env: process.env,
-      onOutput: sendSyncOutput,
+    const result = await runProcess(basePython, ["-m", "venv", supportPaths.venvDir], {
+      cwd: supportPaths.supportRoot, env: createPythonEnv(), onOutput: sendSyncOutput,
     });
-    if (!venvResult.ok) {
-      return { ok: false, error: "Python 가상환경 생성에 실패했습니다.", details: venvResult.stderr };
-    }
+    if (!result.ok) return { ok: false, error: "Python 가상환경 생성 실패. Python 3.11 이상이 필요합니다.", details: result.stderr };
   }
-
-  const venvPython = path.join(supportPaths.venvDir, "bin", "python3");
+  const venvPythonExecutable = userPython;
   const commands = [
-    [venvPython, ["-m", "ensurepip", "--upgrade"], "pip 준비"],
-    [venvPython, ["-m", "pip", "install", "--upgrade", "pip<25"], "pip 업그레이드"],
-    [venvPython, ["-m", "pip", "install", "-r", codePaths.requirementsPath], "Python 패키지 설치"],
-    [venvPython, ["-m", "playwright", "install", "chromium"], "Playwright Chromium 설치"],
+    [venvPythonExecutable, ["-m", "ensurepip", "--upgrade"], "pip 준비"],
+    [venvPythonExecutable, ["-m", "pip", "install", "--upgrade", "pip<25"], "pip 업그레이드"],
+    [venvPythonExecutable, ["-m", "pip", "install", "-r", codePaths.requirementsPath], "Python 패키지 설치"],
+    [venvPythonExecutable, ["-m", "playwright", "install", "chromium"], "Playwright Chromium 설치"],
   ];
 
   for (const [command, args, label] of commands) {
@@ -385,7 +386,7 @@ async function installPythonDependencies() {
     }
   }
 
-  return { ok: true, pythonExecutable: venvPython };
+  return { ok: true, pythonExecutable: venvPythonExecutable };
 }
 
 function getConfigPayload() {
@@ -404,6 +405,7 @@ function getAppState() {
     logExists: fs.existsSync(supportPaths.logFilePath),
     databaseExists: fs.existsSync(supportPaths.databasePath),
     pythonExecutable: choosePythonExecutable(),
+    platform: process.platform,
     isPackaged: isPackagedRuntime(),
     isSyncRunning: syncProcess !== null,
     codeRoot: codePaths.codeRoot,
@@ -438,7 +440,7 @@ function createWindow() {
     minWidth: 1080,
     minHeight: 760,
     backgroundColor: "#111827",
-    titleBarStyle: "hiddenInset",
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -559,8 +561,11 @@ ipcMain.handle("readme:open", async () => {
 ipcMain.handle("sync:reset-history", async () => {
   ensureSupportFiles();
   const { databasePath } = getSupportPaths();
-  if (fs.existsSync(databasePath)) {
-    fs.unlinkSync(databasePath);
+  if (syncProcess !== null) return { ok: false, error: "동기화 중에는 기록을 초기화할 수 없습니다." };
+  if (fs.existsSync(databasePath)) fs.unlinkSync(databasePath);
+  const dataDir = getSupportPaths().dataDir;
+  for (const name of fs.readdirSync(dataDir)) {
+    if (/^outlook-(?:[a-f0-9]{64}|preview)\.sqlite3$/.test(name)) fs.unlinkSync(path.join(dataDir, name));
   }
   return { ok: true };
 });
@@ -606,6 +611,7 @@ ipcMain.handle("sync:run", async (_, payload = {}) => {
     syncProcess = spawn(pythonExecutable, [scriptPath], {
       cwd: codeRoot,
       env: createPythonEnv(settings),
+      windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (error) {
@@ -633,4 +639,12 @@ ipcMain.handle("sync:run", async (_, payload = {}) => {
   });
 
   return { ok: true };
+});
+
+// A closed app must not leave a collector writing calendars in the background.
+app.on("before-quit", () => { syncProcess?.kill(); });
+ipcMain.handle("export:open", async () => {
+  const folder = path.join(getSupportRoot(), "data");
+  fs.mkdirSync(folder, { recursive: true });
+  return shell.openPath(folder);
 });
