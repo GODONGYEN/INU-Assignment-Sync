@@ -259,6 +259,18 @@ npm run open
 - 기존 설정의 `cyber.inu.ac.kr` 주소는 실행 시 새 LMS 홈으로 전환됩니다. Calendar 이름, 알림, DRY_RUN 설정은 유지됩니다.
 - 이전/이후 수집 개월 설정은 과제 마감일 필터로 적용합니다. 현재 수강 목록에 없는 지난 학기 강좌와 아직 공개되지 않은 과제는 수집하지 않습니다.
 - 신규 LMS 과제 ID는 구 LMS ID와 구분하여 기존 일정을 잘못 덮어쓰지 않습니다.
-- 크롬에서 화면과 경로를 확인했으며, 자동 테스트는 로컬 HTML 재현 화면을 사용합니다. 실제 인증 세션을 이용한 전체 수집은 앱에서 로그인 후 DRY RUN으로 확인하세요.
+- 크롬에서 화면과 경로를 확인했으며, 자동 테스트는 로컬 HTML 재현 화면을 사용합니다. 2026-09-22 사용자가 새 설치본의 정상 동작을 확인했습니다. 새 환경에서는 로그인 후 DRY RUN으로 수집 결과를 먼저 확인하세요.
 
 개발 검증: `.venv/bin/python -m unittest discover -s tests -v`
+
+### 업데이트 후에도 구 LMS가 열릴 때
+
+GitHub 소스 업데이트만으로 이미 설치된 앱이 자동 교체되지는 않습니다. 동기화 실행 시 `cyber.inu.ac.kr/login.php`가 열리면 구버전 앱을 실행 중인지 확인하세요.
+
+1. 실행 중인 INU Assignment Sync를 종료합니다.
+2. 업데이트된 소스로 `electron-app`에서 `npm run pack`을 실행합니다.
+3. `electron-app/release/mac-arm64/INU Assignment Sync.app`으로 `/Applications/INU Assignment Sync.app`을 교체합니다. 기존 앱은 필요하면 별도 폴더에 백업합니다.
+4. 응용 프로그램 폴더의 새 앱을 실행하고 LMS 주소가 `https://lms.inu.ac.kr`인지 확인합니다.
+5. DRY RUN을 실행하여 새 LMS 로그인 화면에서 SSO 로그인을 진행합니다.
+
+앱 교체 시 Application Support 폴더의 설정과 동기화 기록은 유지됩니다. 이전 DMG에 들어 있는 앱을 다시 실행하지 않도록 주의하세요.
