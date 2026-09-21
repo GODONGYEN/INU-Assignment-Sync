@@ -19,12 +19,13 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
 from src.config import DATABASE_PATH, ENV_EXAMPLE_PATH, ENV_PATH, LOG_FILE_PATH, PROJECT_ROOT, README_PATH
+from src.lms_urls import migrate_lms_url
 from src.env_utils import parse_env_file, update_env_file
 from src.logging_utils import setup_file_logging
 
 
 DEFAULT_SETTINGS = {
-    "BASE_URL": "https://cyber.inu.ac.kr",
+    "BASE_URL": "https://lms.inu.ac.kr",
     "CALENDAR_NAME": "INU 과제",
     "CALENDAR_MONTHS_BACK": "2",
     "CALENDAR_MONTHS_FORWARD": "6",
@@ -56,7 +57,7 @@ class SyncAppGUI:
         self.root.title("INU Assignment Sync")
         self.root.geometry("980x760")
 
-        self.base_url_var = tk.StringVar(value=self.settings["BASE_URL"])
+        self.base_url_var = tk.StringVar(value=migrate_lms_url(self.settings["BASE_URL"]))
         self.calendar_name_var = tk.StringVar(value=self.settings["CALENDAR_NAME"])
         self.months_back_var = tk.StringVar(value=self.settings["CALENDAR_MONTHS_BACK"])
         self.months_forward_var = tk.StringVar(value=self.settings["CALENDAR_MONTHS_FORWARD"])

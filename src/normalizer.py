@@ -46,7 +46,9 @@ def normalize_link_for_identity(link: str) -> str:
 
     # Moodle mod_assign 링크라면 id 파라미터가 사실상 고유값 역할을 합니다.
     if "/mod/assign/" in parsed.path and query.get("id"):
-        return f"mod_assign:{query['id'][0]}"
+        # The new LMS reuses Moodle numeric IDs from a separate database.
+        prefix = "lms.inu.ac.kr:" if parsed.hostname == "lms.inu.ac.kr" else ""
+        return f"{prefix}mod_assign:{query['id'][0]}"
 
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
 

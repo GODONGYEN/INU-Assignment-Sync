@@ -14,9 +14,9 @@ const DEV_SERVER_URL = "http://localhost:5173";
 const IS_DEV_SERVER_MODE = process.argv.includes("--dev");
 
 const DEFAULT_SETTINGS = {
-  LOGIN_URL: "https://cyber.inu.ac.kr/login.php",
-  ASSIGNMENTS_URL: "https://cyber.inu.ac.kr/calendar/view.php?view=month",
-  BASE_URL: "https://cyber.inu.ac.kr",
+  LOGIN_URL: "https://lms.inu.ac.kr/",
+  ASSIGNMENTS_URL: "https://lms.inu.ac.kr/",
+  BASE_URL: "https://lms.inu.ac.kr",
   USE_MANUAL_LOGIN: "true",
   GUI_MODE: "true",
   HEADLESS: "false",
@@ -176,6 +176,13 @@ function readEnvFile(envPath) {
     values[key] = value;
   }
 
+  for (const key of ["LOGIN_URL", "ASSIGNMENTS_URL", "BASE_URL"]) {
+    try {
+      if (new URL(values[key]).hostname === "cyber.inu.ac.kr") {
+        values[key] = DEFAULT_SETTINGS[key];
+      }
+    } catch { /* Keep custom or missing settings unchanged. */ }
+  }
   return values;
 }
 

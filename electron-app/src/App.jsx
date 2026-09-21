@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const DEFAULT_SETTINGS = {
-  BASE_URL: "https://cyber.inu.ac.kr",
+  BASE_URL: "https://lms.inu.ac.kr",
   CALENDAR_NAME: "INU 과제",
   CALENDAR_MONTHS_BACK: "2",
   CALENDAR_MONTHS_FORWARD: "6",
@@ -181,7 +181,7 @@ export default function App() {
               ...previous,
               lms: {
                 label: "과제 수집 완료",
-                detail: "캘린더 이벤트를 읽었습니다",
+                detail: "LMS 과제와 마감 시각을 읽었습니다",
                 tone: "ok",
               },
             }));
@@ -440,7 +440,7 @@ export default function App() {
             <h1>과제 마감일을 캘린더에 자동 정리합니다</h1>
             <p className="hero-subtitle">INU Assignment Sync</p>
             <p className="hero-description">
-              브라우저에서 직접 로그인하면 앱이 LMS 월간 캘린더를 읽고, 과제 마감일을 macOS Calendar 일정으로 동기화합니다.
+              브라우저에서 직접 로그인하면 앱이 LMS 수강 강좌의 과제를 읽고, 과제 마감일을 macOS Calendar 일정으로 동기화합니다.
               비밀번호는 저장하지 않고, 처음에는 DRY RUN으로 안전하게 확인할 수 있습니다.
             </p>
             <div className="hero-actions">
@@ -474,7 +474,7 @@ export default function App() {
             <span className="workflow-step">2</span>
             <div>
               <h2>과제 수집</h2>
-              <p>월간 캘린더의 과제 이벤트를 읽고 마감일을 정리합니다.</p>
+              <p>수강 강좌의 학습활동에서 과제와 실제 마감 시각을 읽습니다.</p>
             </div>
           </article>
           <article className="workflow-card">

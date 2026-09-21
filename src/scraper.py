@@ -351,32 +351,18 @@ def is_manual_login_completed(page: Page) -> bool:
     except Exception:
         current_url = ""
 
-    if "login.php" not in current_url:
-        return True
-
-    try:
-        body_id = clean_text(page.locator("body").first.get_attribute("id") or "")
-    except Exception:
-        body_id = ""
-
-    if body_id and body_id != "page-login-index":
-        return True
-
-    try:
-        success_locator = page.locator(LOGIN_SUCCESS_WAIT_SELECTOR).first
-        if success_locator.count() > 0 and success_locator.is_visible():
-            return True
-    except Exception:
-        pass
-
-    try:
-        calendar_locator = page.locator(CALENDAR_TABLE_SELECTOR).first
-        if calendar_locator.count() > 0 and calendar_locator.is_visible():
-            return True
-    except Exception:
-        pass
-
-    return False
+    parsed = urlparse(current_url)
+    if parsed.hostname != urlparse(BASE_URL).hostname or "login" in parsed.path.lower():
+        return False
+    if safe_locator_count(page, 'input[type="password"]'):
+        return False
+    # A redirect to the SSO provider or a public home page is not a login.
+    return any(safe_locator_count(page, selector) > 0 for selector in [
+        "a[href*='/course/view.php?id=']",
+        "a[href*='/login/logout.php']",
+        "a[href*='logout']",
+        CALENDAR_TABLE_SELECTOR,
+    ])
 
 
 def wait_for_manual_login_completion(page: Page) -> None:
@@ -863,7 +849,7 @@ def perform_login(page: Page) -> None:
             print("이러닝 사이트에 직접 로그인해 주세요. GUI 모드에서는 Enter 입력 없이 자동으로 로그인 완료를 감지합니다.")
             wait_for_manual_login_completion(page)
         else:
-            print("이러닝 사이트에 직접 로그인한 뒤, LMS 캘린더 월별 페이지로 접근 가능한 상태에서 Enter를 눌러 주세요.")
+            print("이러닝 사이트에 직접 로그인한 뒤, LMS 수강 강좌를 확인할 수 있는 상태에서 Enter를 눌러 주세요.")
             try:
                 input("로그인 완료 후 Enter: ")
             except EOFError as error:
@@ -895,6 +881,11 @@ def perform_login(page: Page) -> None:
 
 def extract_assignments_from_page(page: Page) -> list[RawAssignment]:
     """월간 캘린더에서 이벤트를 수집하고, 각 상세 페이지를 따라가 과제 정보로 정리합니다."""
+    if urlparse(BASE_URL).hostname == "lms.inu.ac.kr":
+        from src.new_lms import collect_new_lms_assignments
+        window_start, window_end = build_collection_window(build_collection_months())
+        return collect_new_lms_assignments(page, window_start, window_end)
+
     calendar_events, _summary, window_start, window_end = collect_calendar_events(page)
     raw_assignments: list[RawAssignment] = []
     seen_calendar_keys = set()

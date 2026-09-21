@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from src.lms_urls import LMS_HOME, migrate_lms_url
 
 
 # 개발 환경에서는 프로젝트 루트를, 패키징 앱에서는 Electron이 넘겨준 앱 데이터 경로를 사용합니다.
@@ -50,9 +51,9 @@ def get_int_list(env_name: str, default: list[int]) -> list[int]:
 # --------------------------------------------
 # 사이트 정보
 # --------------------------------------------
-LOGIN_URL = os.getenv("LOGIN_URL", "https://cyber.inu.ac.kr/login.php")
-ASSIGNMENTS_URL = os.getenv("ASSIGNMENTS_URL", "https://cyber.inu.ac.kr/calendar/view.php?view=month")
-BASE_URL = os.getenv("BASE_URL", "https://cyber.inu.ac.kr")
+LOGIN_URL = migrate_lms_url(os.getenv("LOGIN_URL", LMS_HOME))
+ASSIGNMENTS_URL = migrate_lms_url(os.getenv("ASSIGNMENTS_URL", LMS_HOME))
+BASE_URL = migrate_lms_url(os.getenv("BASE_URL", LMS_HOME)).rstrip("/")
 
 
 # --------------------------------------------
