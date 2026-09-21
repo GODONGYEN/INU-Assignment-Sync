@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -14,10 +15,16 @@ class SQLiteSyncStore:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize_database()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self):
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
-        return connection
+        try:
+            with connection:
+                yield connection
+        finally:
+            # sqlite3's transaction context does not close the file handle.
+            connection.close()
 
     def _initialize_database(self) -> None:
         """처음 실행할 때 필요한 테이블을 만들어 둡니다."""
